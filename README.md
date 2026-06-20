@@ -86,7 +86,7 @@ Firestore Database ← Create database ← اختر وضع **Production mode** (
 ```bash
 npm install -g firebase-tools
 firebase login
-firebase init hosting   # اختر مشروعك hiba-5fee8، ومجلد public = dist
+firebase init hosting   # اختر مشروعك sudan tec-5fee8، ومجلد public = dist
 npm run build
 firebase deploy
 ```

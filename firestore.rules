@@ -1,0 +1,80 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---- users ----
+    // كل مستخدم يقرأ ويكتب ملفه الشخصي فقط
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid);
+      allow delete: if false;
+    }
+
+    // ---- clinics ----
+    // أي شخص (حتى غير مسجل) يمكنه تصفح العيادات والمستشفيات
+    // فقط صاحب الحساب (ownerId == uid المستند) يمكنه التعديل
+    match /clinics/{uid} {
+      allow read: if true;
+      allow create: if isOwner(uid) && request.resource.data.ownerId == uid;
+      allow update: if isOwner(uid);
+      allow delete: if false;
+    }
+
+    // ---- appointments ----
+    match /appointments/{appointmentId} {
+      allow create: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid;
+
+      allow read: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.clinicId == request.auth.uid
+      );
+
+      // المريض أو العيادة المعنية فقط يمكنهما تعديل حالة الحجز
+      allow update: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.clinicId == request.auth.uid
+      );
+
+      allow delete: if false;
+    }
+
+    // ---- chats ----
+    match /chats/{chatId} {
+      allow create: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid;
+
+      allow read, update: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.clinicOwnerId == request.auth.uid
+      );
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function isParticipant() {
+          let chat = get(/databases/$(database)/documents/chats/$(chatId)).data;
+          return isSignedIn() && (
+            chat.patientId == request.auth.uid ||
+            chat.clinicOwnerId == request.auth.uid
+          );
+        }
+
+        allow read: if isParticipant();
+        allow create: if isParticipant()
+          && request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
